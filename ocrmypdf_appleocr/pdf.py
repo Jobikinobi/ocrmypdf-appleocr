@@ -20,9 +20,14 @@ from pikepdf import (
 )
 
 from ocrmypdf_appleocr.common import Textbox, log
+from ocrmypdf_appleocr.font import expand_glyphless_font
 
 TEXT_POSITION_DEBUG = False
-GLYPHLESS_FONT = importlib.resources.read_binary("ocrmypdf_appleocr", "pdf.ttf")
+# One empty glyph per character code, so that a producer that subsets the font
+# cannot merge two codes into one. See ocrmypdf_appleocr.font.
+GLYPHLESS_FONT = expand_glyphless_font(
+    importlib.resources.read_binary("ocrmypdf_appleocr", "pdf.ttf")
+)
 CHAR_ASPECT = 2
 FONT_NAME = Name("/f-0-0")
 # Minimum width of the space rendered between two words, as a fraction of the font size
@@ -57,7 +62,10 @@ def register_glyphlessfont(pdf: Pdf):
     cid_font_type2 = pdf.make_indirect(
         Dictionary(
             BaseFont=Name.GlyphLessFont,
-            CIDToGIDMap=PLACEHOLDER,
+            # CID n is glyph n. Mapping every CID to a single glyph would render
+            # just as well - nothing is painted - but it lets a font subsetter
+            # collapse all the codes onto one, which destroys the text.
+            CIDToGIDMap=Name.Identity,
             CIDSystemInfo=Dictionary(
                 Ordering="Identity",
                 Registry="Adobe",
@@ -70,7 +78,6 @@ def register_glyphlessfont(pdf: Pdf):
         )
     )
     basefont.DescendantFonts = [cid_font_type2]
-    cid_font_type2.CIDToGIDMap = pdf.make_stream(b"\x00\x01" * 65536)
     basefont.ToUnicode = pdf.make_stream(
         b"/CIDInit /ProcSet findresource begin\n"
         b"12 dict begin\n"
