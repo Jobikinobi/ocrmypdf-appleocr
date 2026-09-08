@@ -37,6 +37,7 @@ Loading the plugin explicitly with `--plugin ocrmypdf_appleocr` still works, and
 
 - `--appleocr-recognition-mode`: Recognition mode for Apple Vision OCR. Choices: `fast`, `accurate`, or `livetext`. Default: `livetext` on macOS 13 and later, `accurate` on macOS 12 and earlier.
 - `--appleocr-disable-correction`: Disable language correction in Apple Vision OCR (default: `False`)
+- `--appleocr-debug-boxes`: Stroke the recognized text boxes onto the output PDF, to check how the text layer lines up with the page (default: `False`). Only applies to the `sandwich` renderer.
 - `--ocr-engine`: OCR engine to use. The plugin appends `appleocr` to OCRmyPDF's built-in choices (`auto`, `tesseract`, `none`). Default: `auto`, which resolves to this plugin when it is the only engine plugin installed; specify `appleocr` explicitly if other third-party engine plugins are also present. Requires OCRmyPDF 17 or later.
 - `--pdf-renderer`: Renderer used to embed OCR results as invisible (“phantom”) text. Choices: `sandwich`, `fpdf2` (also `auto`, `hocr`, `hocrdebug`, which OCRmyPDF now treats as aliases for `fpdf2`). Default: `sandwich`.
 - `-l` or `--language`: Specify OCR language(s) in ISO 639-2 three-letter codes. Use `und` for undetermined language. Specifying multiple languages joined with `+` (e.g. `eng+fra`) for multilingual documents is **not supported**.
@@ -67,6 +68,16 @@ This plugin supports two [OCRmyPDF renderers](https://ocrmypdf.readthedocs.io/en
   - **Vertical (tategaki) CJK text is mis-positioned.** The text box for each vertical line collapses into a narrow horizontal band instead of spanning the column.
 
 If `--pdf-renderer` is left at its default (`auto`), the plugin defaults to `sandwich`. Pass `--pdf-renderer sandwich` or `--pdf-renderer fpdf2` explicitly to override this.
+
+#### Surviving a re-save by Apple's PDFKit
+
+The `sandwich` text layer is drawn with a glyphless font: it carries the characters and their positions, but paints nothing. The usual way to build such a font — one glyph, and a `/CIDToGIDMap` that sends all 65536 character codes to it — renders correctly but does not survive being rewritten, because a producer that subsets embedded fonts works in glyph space and merges every code that shares a glyph into one. The `/ToUnicode` CMap is then rebuilt for the single survivor and the whole text layer decodes to U+0001.
+
+Apple's PDFKit rewrites fonts on save, so anything that saves a PDF through Quartz — Preview, Safari, and PDFKit-based annotation, stamping and redaction tools — destroys such a text layer. The output still *looks* right, and text is still selectable, but the selection copies as U+0001, search finds nothing, and every other extractor sees an empty page.
+
+This plugin therefore gives every character code a glyph of its own: [`ocrmypdf_appleocr/font.py`](ocrmypdf_appleocr/font.py) expands the bundled two-glyph font to the full 65535 glyphs TrueType allows, all of them empty, and the font is used with `/CIDToGIDMap /Identity`. The codes then stay distinct through a subsetting round trip. The added glyphs and metrics are zero bytes, so the embedded font costs about 700 bytes per page once compressed. `script/test_text_layer.py` checks the round trip against PDFKit.
+
+The same weakness applies to the `fpdf2` renderer whenever OCRmyPDF falls back to its own glyphless font (`Occulta.ttf`, six glyphs) rather than an actual text font — that is upstream code, and this plugin cannot fix it.
 
 ### Supported Languages
 

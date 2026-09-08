@@ -30,7 +30,7 @@ from ocrmypdf_appleocr.vision import (
     supported_languages_fast,
 )
 
-__version__ = "0.4.0"
+__version__ = "0.4.1"
 
 # Name this engine registers under for OCRmyPDF's --ocr-engine option.
 OCR_ENGINE_NAME = "appleocr"
@@ -75,6 +75,15 @@ def add_options(parser):
         "--appleocr-disable-correction",
         action="store_true",
         help="Disable language correction in Apple Vision OCR (default: False)",
+        default=False,
+    )
+    appleocr_options.add_argument(
+        "--appleocr-debug-boxes",
+        action="store_true",
+        help=(
+            "Stroke the recognized text boxes onto the output PDF, to check how the "
+            "text layer lines up with the page (default: False)"
+        ),
         default=False,
     )
     appleocr_options.add_argument(
@@ -185,7 +194,7 @@ class AppleOCREngine(OcrEngine):
         ) = perform_ocr(Path(input_file), options)
         plaintext = "\n".join(tb.text for tb in res)
 
-        generate_pdf(dpi, w, h, 1.0, res, Path(output_pdf), True)
+        generate_pdf(dpi, w, h, 1.0, res, Path(output_pdf), options.appleocr_debug_boxes)
 
         with open(output_text, "w", encoding="utf-8") as f:
             f.write(plaintext)
