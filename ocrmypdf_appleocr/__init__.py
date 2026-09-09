@@ -30,7 +30,10 @@ from ocrmypdf_appleocr.vision import (
     supported_languages_fast,
 )
 
-__version__ = "0.4.1"
+# The "+pdfkit" local version marks this fork, whose text layer survives being
+# re-saved by Apple's PDFKit. It is not the package published on PyPI under this
+# name; see the installation section of the README.
+__version__ = "0.4.1+pdfkit"
 
 # Name this engine registers under for OCRmyPDF's --ocr-engine option.
 OCR_ENGINE_NAME = "appleocr"

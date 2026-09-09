@@ -4,14 +4,62 @@ A plugin for [OCRmyPDF](https://github.com/ocrmypdf/OCRmyPDF/) that enables opti
 
 Apple’s proprietary OCR implementation provides excellent accuracy and speed compared to other on-device OCR engines such as Tesseract.
 
+## This fork
+
+This is a fork of [mkyt/OCRmyPDF-AppleOCR](https://github.com/mkyt/OCRmyPDF-AppleOCR). It differs from upstream in two ways, both in the `sandwich` text layer:
+
+- **The text layer survives being re-saved by Apple's PDFKit.** Upstream's glyphless font maps every character code to a single glyph, which does not survive font subsetting: saving the PDF from Preview, Safari, or any PDFKit-based annotation, stamping or redaction tool leaves the page looking correct but decodes the entire text layer as U+0001 — or drops it altogether. See [Surviving a re-save by Apple's PDFKit](#surviving-a-re-save-by-apples-pdfkit).
+- **Debug boxes are off by default.** Upstream strokes a red rectangle around every recognized line into every output PDF. Here that is behind `--appleocr-debug-boxes`.
+
 ## Installation
 
 Requires macOS, Python 3.11 or later, and OCRmyPDF 14.2.1 or later (17 or later for the `--ocr-engine` and `fpdf2` renderer features described below).
 
-The package is available on [PyPI](https://pypi.org/project/ocrmypdf-appleocr/).
+> **Do not `pip install ocrmypdf-appleocr`.** That name on [PyPI](https://pypi.org/project/ocrmypdf-appleocr/) is upstream's package, which has neither of the fixes above. This fork is installed from Git.
+
+The plugin has to land in the *same* environment as OCRmyPDF itself — it is loaded through OCRmyPDF's entry points, so installing it next to a different interpreter does nothing.
+
+**If OCRmyPDF is installed as a tool** (`uv tool install ocrmypdf`, or pipx), install the plugin into that tool's environment:
 
 ```bash
-pip install ocrmypdf-appleocr
+uv tool install --force ocrmypdf --with git+https://github.com/Jobikinobi/ocrmypdf-appleocr.git@main
+# or, with pipx:
+pipx install ocrmypdf
+pipx inject ocrmypdf git+https://github.com/Jobikinobi/ocrmypdf-appleocr.git@main
+```
+
+**If OCRmyPDF is installed in a virtualenv**, install both there:
+
+```bash
+pip install ocrmypdf git+https://github.com/Jobikinobi/ocrmypdf-appleocr.git@main
+```
+
+**To work on the plugin**, clone it and install it editable, so the code you edit is the code OCRmyPDF loads:
+
+```bash
+git clone https://github.com/Jobikinobi/ocrmypdf-appleocr.git
+cd ocrmypdf-appleocr
+uv venv && uv pip install -e . ocrmypdf
+```
+
+### Checking which one you have
+
+The plugin version is reported in the `Creator` metadata of every PDF it produces, so a file can be traced back to the code that made it. This fork carries a `+pdfkit` local version; upstream does not.
+
+```bash
+$ python -c "import ocrmypdf_appleocr; print(ocrmypdf_appleocr.__version__)"
+0.4.1+pdfkit
+
+$ pdfinfo output.pdf | grep Creator
+Creator:  OCRmyPDF 17.11.0 / AppleOCR Plugin 0.4.1+pdfkit (on macOS 26.6)
+```
+
+If you see a bare `0.4.0`, you are running upstream's PyPI build and your text layer will not survive a PDFKit save. `script/test_text_layer.py` checks that directly:
+
+```bash
+python script/test_text_layer.py
+ok   as generated: all 4 lines read back
+ok   after PDFKit re-save: all 4 lines read back
 ```
 
 ## Usage
